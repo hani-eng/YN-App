@@ -5,7 +5,9 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -13,7 +15,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.WindowManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -22,6 +26,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.Toast;
@@ -42,6 +47,13 @@ public class ShowWebView extends AppCompatActivity {
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ProgressBar progressBar;
+    private ImageButton btnWhatsApp;
+    private ImageButton btnReportIssue;
+    private View fabContainer;
+    private FrameLayout fullscreenContainer;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
+
     private static final String WEB_URL = "http://www.y.net/status";
     private static final String WHATSAPP_NUMBER = "967771908495";
     private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
@@ -76,9 +88,12 @@ public class ShowWebView extends AppCompatActivity {
         webView = (WebView) findViewById(R.id.webView1);
         swipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipeRefreshLayout);
         progressBar = (ProgressBar) findViewById(R.id.progressBar);
+        btnWhatsApp = findViewById(R.id.btnWhatsApp);
+        btnReportIssue = findViewById(R.id.btnReportIssue);
+        fabContainer = findViewById(R.id.fabContainer);
 
-        ImageButton btnWhatsApp = findViewById(R.id.btnWhatsApp);
-        ImageButton btnReportIssue = findViewById(R.id.btnReportIssue);
+        fullscreenContainer = new FrameLayout(this);
+        fullscreenContainer.setBackgroundColor(0xFF000000);
 
         btnWhatsApp.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -229,6 +244,7 @@ public class ShowWebView extends AppCompatActivity {
         settings.setSupportZoom(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setAllowContentAccess(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -241,7 +257,58 @@ public class ShowWebView extends AppCompatActivity {
                     progressBar.setVisibility(View.GONE);
                 }
             }
+
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+
+                customView = view;
+                customViewCallback = callback;
+
+                FrameLayout decor = (FrameLayout) getWindow().getDecorView();
+                decor.addView(fullscreenContainer, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+
+                webView.setVisibility(View.GONE);
+                fabContainer.setVisibility(View.GONE);
+
+                fullscreenContainer.addView(view, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customView == null) return;
+
+                FrameLayout decor = (FrameLayout) getWindow().getDecorView();
+                decor.removeView(fullscreenContainer);
+
+                fullscreenContainer.removeView(customView);
+
+                webView.setVisibility(View.VISIBLE);
+                fabContainer.setVisibility(View.VISIBLE);
+
+                customView = null;
+                if (customViewCallback != null) {
+                    customViewCallback.onCustomViewHidden();
+                    customViewCallback = null;
+                }
+
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            }
         });
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -283,6 +350,7 @@ public class ShowWebView extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        webView.onResume();
         networkReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -298,6 +366,7 @@ public class ShowWebView extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        webView.onPause();
         if (networkReceiver != null) {
             unregisterReceiver(networkReceiver);
         }
@@ -340,7 +409,10 @@ public class ShowWebView extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (customView != null) {
+            webView.setWebChromeClient(new WebChromeClient());
+            webView.getWebChromeClient().onHideCustomView();
+        } else if (webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
