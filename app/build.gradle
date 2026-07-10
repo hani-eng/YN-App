@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'yemennetmikrotik'
+    namespace 'com.yemennet.mikrotik'
     compileSdk 34
 
     defaultConfig {
-        applicationId "yemennetmikrotik"
+        applicationId "com.yemennet.mikrotik"
         minSdk 21
         targetSdk 34
         versionCode 2
