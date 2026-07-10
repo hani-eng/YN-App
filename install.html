@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحميل تطبيق YEMEN-NET</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #1a237e, #0d47a1, #01579b);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .card {
+            background: rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: flex-start;
+        }
+        .step:last-child { margin-bottom: 0; }
+        .step-num {
+            background: #4caf50;
+            color: #fff;
+            min-width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .step-text {
+            font-size: 14px;
+            line-height: 1.8;
+            padding-top: 4px;
+        }
+        .screenshot-box {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 14px;
+            margin: 10px 0;
+            font-size: 13px;
+            line-height: 1.9;
+            border-right: 3px solid #4caf50;
+        }
+        .screenshot-box strong {
+            color: #ffd54f;
+        }
+        .btn-download {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            background: #4caf50;
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 8px;
+            transition: background 0.3s;
+        }
+        .btn-download:active { background: #388e3c; }
+        .btn-install {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            background: #ff9800;
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        .btn-install:active { background: #e65100; }
+        .warning {
+            background: rgba(244,67,54,0.2);
+            border: 1px solid rgba(244,67,54,0.4);
+            border-radius: 10px;
+            padding: 14px;
+            margin: 10px 0;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .tip {
+            background: rgba(76,175,80,0.2);
+            border: 1px solid rgba(76,175,80,0.4);
+            border-radius: 10px;
+            padding: 14px;
+            margin: 10px 0;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .back-btn {
+            display: block;
+            text-align: center;
+            padding: 12px;
+            color: #fff;
+            text-decoration: none;
+            opacity: 0.8;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>YEMEN-NET</h1>
+            <p>تطبيق إدارة الشبكة اللاسلكية</p>
+        </div>
+
+        <div class="card">
+            <h2> تحميل التطبيق</h2>
+            <a href="YEMEN-NET.apk" class="btn-download" download="YEMEN-NET.apk">
+                 تحميل التطبيق (YEMEN-NET)
+            </a>
+            <p style="text-align:center;font-size:12px;margin-top:8px;opacity:0.7;">
+                الحجم: ~1 ميجابايت | يعمل على Android 5.0 فأكثر
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>⚠️ عند التثبيت ستظهر رسالة تحذير</h2>
+            <p style="font-size:14px;line-height:1.8;margin-bottom:12px;">
+                هذا تحذير عادي من Google لأن التطبيق ليس من متجر Play.
+                اتبع الخطوات التالية لتثبيته:
+            </p>
+
+            <div class="warning">
+                <strong>ستظهر هذه الرسالة:</strong><br>
+                "تم حظر التطبيق لحماية جهازك"
+            </div>
+        </div>
+
+        <div class="card">
+            <h2> تجاوز الحماية - خطوة بخطوة</h2>
+
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    عند ظهور رسالة الحظر اضغط على
+                    <strong>"التفاصيل"</strong>
+                    أو <strong>"تغيب"</strong>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    سيظهر لك خيار اضغط عليه
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    ثم اختر
+                    <strong>"تثبيت على أي حال"</strong>
+                </div>
+            </div>
+
+            <div class="tip">
+                <strong> إذا لم تظهر هذه الخيارات:</strong><br>
+                1. افتح <strong>متجر Google Play</strong><br>
+                2. اضغط على <strong>صورتك</strong> (أعلى يمين)<br>
+                3. اختر <strong>Play Protect</strong><br>
+                4. اضغط <strong>⚙️ إعدادات</strong><br>
+                5. أوقف <strong>"فحص تطبيقات الجهاز"</strong><br>
+                6. ارجع وثبّت التطبيق
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>بعد التثبيت</h2>
+            <div class="step">
+                <div class="step-num">✓</div>
+                <div class="step-text">
+                    افتح تطبيق <strong>YEMEN-NET</strong> من الشاشة الرئيسية<br>
+                    يمكنك الآن تسجيل الدخول بالتطبيق مباشرة
+                </div>
+            </div>
+        </div>
+
+        <a href="/login" class="back-btn">العودة لصفحة تسجيل الدخول</a>
+    </div>
+</body>
+</html>

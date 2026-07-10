@@ -60,10 +60,18 @@ jobs:
         export KEY_PASSWORD=yemen123
         ./gradlew assembleDebug --stacktrace
 
-    - name: Verify APK exists
+    - name: Rename APK files
       run: |
-        ls -la app/build/outputs/apk/release/
-        ls -la app/build/outputs/apk/debug/
+        cp app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/YEMEN-NET.apk || true
+        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/YEMEN-NET.apk || true
+
+    - name: Create Hotspot Package
+      run: |
+        mkdir -p hotspot-package
+        cp install.html hotspot-package/install.html
+        cp app/build/outputs/apk/release/*.apk hotspot-package/YEMEN-NET.apk 2>/dev/null || true
+        cp app/build/outputs/apk/release/*.apk hotspot-package/YEMEN-NET.apk || cp app/build/outputs/apk/debug/*.apk hotspot-package/YEMEN-NET.apk
+        ls -la hotspot-package/
 
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
@@ -72,9 +80,9 @@ jobs:
         path: app/build/outputs/apk/release/*.apk
         retention-days: 90
 
-    - name: Upload Debug APK
+    - name: Upload Hotspot Package (APK + Install Page)
       uses: actions/upload-artifact@v4
       with:
-        name: YEMEN-NET-Debug-APK
-        path: app/build/outputs/apk/debug/*.apk
+        name: YEMEN-NET-Hotspot-Package
+        path: hotspot-package/*
         retention-days: 90
