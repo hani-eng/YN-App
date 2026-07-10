@@ -5,13 +5,13 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -46,8 +46,8 @@ public class ShowWebView extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.show_web_view);
 
-        webView = findViewById(R.id.webView1);
-        swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
+        webView = (WebView) findViewById(R.id.webView1);
+        swipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipeRefreshLayout);
 
         swipeRefreshLayout.setColorSchemeResources(
                 android.R.color.holo_blue_bright,
@@ -84,11 +84,7 @@ public class ShowWebView extends AppCompatActivity {
         settings.setDisplayZoomControls(false);
         settings.setSupportZoom(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowContentAccess(true);
-        settings.setAppCacheEnabled(true);
-        settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
@@ -121,10 +117,10 @@ public class ShowWebView extends AppCompatActivity {
             }
         });
 
-        webView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+        webView.getViewTreeObserver().addOnScrollChangedListener(new ViewTreeObserver.OnScrollChangedListener() {
             @Override
-            public void onScrollChange(View v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                swipeRefreshLayout.setEnabled(scrollY == 0);
+            public void onScrollChanged() {
+                swipeRefreshLayout.setEnabled(webView.getScrollY() == 0);
             }
         });
     }
