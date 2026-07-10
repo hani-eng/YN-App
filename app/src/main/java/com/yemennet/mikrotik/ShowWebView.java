@@ -8,7 +8,9 @@ import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -91,6 +93,14 @@ public class ShowWebView extends AppCompatActivity {
         btnWhatsApp = findViewById(R.id.btnWhatsApp);
         btnReportIssue = findViewById(R.id.btnReportIssue);
         fabContainer = findViewById(R.id.fabContainer);
+
+        try {
+            AssetManager assetManager = getAssets();
+            Bitmap whatsappBitmap = BitmapFactory.decodeStream(assetManager.open("whatsapp.png"));
+            btnWhatsApp.setImageBitmap(whatsappBitmap);
+        } catch (Exception e) {
+            Log.e("ShowWebView", "Could not load whatsapp.png from assets", e);
+        }
 
         fullscreenContainer = new FrameLayout(this);
         fullscreenContainer.setBackgroundColor(0xFF000000);
