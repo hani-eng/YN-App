@@ -22,6 +22,12 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
+    - name: Accept Android SDK Licenses
+      run: yes | sdkmanager --licenses || true
+
+    - name: Write local.properties
+      run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
     - name: Generate Keystore
       run: |
         mkdir -p keystore
@@ -32,17 +38,20 @@ jobs:
           -alias yemen-net \
           -storepass yemen123 \
           -keypass yemen123 \
-          -dname "CN=YEMEN-NET, OU=Development, O=YEMEN-NET, L=Sana'a, ST=Sana'a, C=YE"
+          -dname "CN=YEMEN-NET, OU=Development, O=YEMEN-NET, L=San, ST=San, C=YE"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+
+    - name: Clean Build
+      run: ./gradlew clean
 
     - name: Build Release APK
       run: |
         export KEYSTORE_PASSWORD=yemen123
         export KEY_ALIAS=yemen-net
         export KEY_PASSWORD=yemen123
-        ./gradlew assembleRelease --stacktrace
+        ./gradlew assembleRelease --stacktrace --info
 
     - name: Build Debug APK
       run: |
@@ -69,18 +78,3 @@ jobs:
         name: YEMEN-NET-Debug-APK
         path: app/build/outputs/apk/debug/*.apk
         retention-days: 90
-
-    - name: Print Download Links
-      run: |
-        echo "============================================"
-        echo "  BUILD COMPLETED SUCCESSFULLY!"
-        echo "============================================"
-        echo ""
-        echo "Download your APKs from the Artifacts tab:"
-        echo "  - YEMEN-NET-Release-APK (signed, recommended)"
-        echo "  - YEMEN-NET-Debug-APK (for testing)"
-        echo ""
-        echo "APK Location after download:"
-        echo "  Release: app/build/outputs/apk/release/YEMEN-NET-release.apk"
-        echo "  Debug:   app/build/outputs/apk/debug/YEMEN-NET-debug.apk"
-        echo "============================================"

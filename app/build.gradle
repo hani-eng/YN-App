@@ -16,10 +16,13 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('../keystore/release-key.jks')
-            storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
-            keyAlias System.getenv('KEY_ALIAS') ?: ''
-            keyPassword System.getenv('KEY_PASSWORD') ?: ''
+            def keystoreFile = file("$rootDir/keystore/release-key.jks")
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
+                keyAlias System.getenv('KEY_ALIAS') ?: ''
+                keyPassword System.getenv('KEY_PASSWORD') ?: ''
+            }
         }
     }
 
