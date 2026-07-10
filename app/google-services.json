@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "768680332195",
+    "project_id": "yemen-net-mikrotik",
+    "storage_bucket": "yemen-net-mikrotik.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:768680332195:android:6e805f91d7fb4aaa18e816",
+        "android_client_info": {
+          "package_name": "com.yemennet.mikrotik"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjVJQXV_9MBgAT8op-GyZvSkKt3N6c2vw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

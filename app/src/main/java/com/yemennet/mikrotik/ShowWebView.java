@@ -5,10 +5,12 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -26,7 +28,10 @@ import android.widget.Toast;
 import android.app.AlertDialog;
 import android.widget.ProgressBar;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 public class ShowWebView extends AppCompatActivity {
@@ -37,6 +42,7 @@ public class ShowWebView extends AppCompatActivity {
     private static final String WEB_URL = "http://www.y.net/status";
     private static final String WHATSAPP_NUMBER = "967771908495";
     private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
+    private static final int NOTIFICATION_PERMISSION_CODE = 100;
 
     private BroadcastReceiver networkReceiver;
 
@@ -100,6 +106,8 @@ public class ShowWebView extends AppCompatActivity {
         });
 
         setupWebView();
+
+        requestNotificationPermission();
 
         if (haveNetworkConnection()) {
             webView.loadUrl(WEB_URL);
@@ -295,6 +303,27 @@ public class ShowWebView extends AppCompatActivity {
             })
             .setCancelable(false)
             .show();
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATION_PERMISSION_CODE);
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NOTIFICATION_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "تم تفعيل الإشعارات", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     @Override
