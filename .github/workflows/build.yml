@@ -24,6 +24,7 @@ jobs:
 
     - name: Generate Keystore
       run: |
+        mkdir -p keystore
         keytool -genkey -v \
           -keystore keystore/release-key.jks \
           -keyalg RSA -keysize 2048 \
@@ -32,7 +33,6 @@ jobs:
           -storepass yemen123 \
           -keypass yemen123 \
           -dname "CN=YEMEN-NET, OU=Development, O=YEMEN-NET, L=Sana'a, ST=Sana'a, C=YE"
-        mkdir -p keystore
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
