@@ -155,10 +155,12 @@ public class ShowWebView extends AppCompatActivity {
 
     private void openWhatsApp() {
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
             String url = "https://api.whatsapp.com/send?phone=" + WHATSAPP_NUMBER;
-            intent.setData(Uri.parse(url));
-            startActivity(Intent.createChooser(intent, "اختر تطبيق"));
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.setPackage(null);
+            Intent chooser = Intent.createChooser(intent, "اختر تطبيق");
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(chooser);
         } catch (Exception e) {
             Toast.makeText(this, "WhatsApp غير مثبت على الجهاز", Toast.LENGTH_SHORT).show();
         }
