@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'io.codetic.webview'
+    namespace 'yemennetmikrotik'
     compileSdk 34
 
     defaultConfig {
-        applicationId "io.codetic.webview"
+        applicationId "yemennetmikrotik"
         minSdk 21
         targetSdk 34
         versionCode 2
