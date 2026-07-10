@@ -4,4 +4,10 @@
         <item name="android:windowFullscreen">false</item>
         <item name="android:statusBarColor">#000000</item>
     </style>
+
+    <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowBackground">#FF1976D2</item>
+        <item name="android:statusBarColor">#FF1976D2</item>
+    </style>
 </resources>

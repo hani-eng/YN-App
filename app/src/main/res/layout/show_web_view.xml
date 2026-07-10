@@ -26,4 +26,38 @@
         android:progressDrawable="@drawable/progress_bar_drawable"
         android:visibility="gone" />
 
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="80dp"
+        android:orientation="vertical"
+        android:elevation="6dp">
+
+        <ImageButton
+            android:id="@+id/btnReportIssue"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/circle_button_red"
+            android:src="@android:drawable/ic_dialog_alert"
+            android:scaleType="centerInside"
+            android:padding="14dp"
+            android:contentDescription="بلاغ عن عطل"
+            android:elevation="4dp" />
+
+        <ImageButton
+            android:id="@+id/btnWhatsApp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/circle_button_green"
+            android:src="@drawable/ic_whatsapp"
+            android:scaleType="centerInside"
+            android:padding="14dp"
+            android:contentDescription="واتساب"
+            android:elevation="4dp" />
+
+    </LinearLayout>
+
 </FrameLayout>

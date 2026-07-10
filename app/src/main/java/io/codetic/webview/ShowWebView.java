@@ -1,8 +1,14 @@
 package io.codetic.webview;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -12,6 +18,12 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.Spinner;
+import android.widget.Toast;
+import android.app.AlertDialog;
 import android.widget.ProgressBar;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -23,6 +35,10 @@ public class ShowWebView extends AppCompatActivity {
     private SwipeRefreshLayout swipeRefreshLayout;
     private ProgressBar progressBar;
     private static final String WEB_URL = "http://www.y.net/status";
+    private static final String WHATSAPP_NUMBER = "967771908495";
+    private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
+
+    private BroadcastReceiver networkReceiver;
 
     private boolean haveNetworkConnection() {
         boolean haveConnectedWifi = false;
@@ -52,6 +68,23 @@ public class ShowWebView extends AppCompatActivity {
         swipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipeRefreshLayout);
         progressBar = (ProgressBar) findViewById(R.id.progressBar);
 
+        ImageButton btnWhatsApp = findViewById(R.id.btnWhatsApp);
+        ImageButton btnReportIssue = findViewById(R.id.btnReportIssue);
+
+        btnWhatsApp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openWhatsApp();
+            }
+        });
+
+        btnReportIssue.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showReportIssueDialog();
+            }
+        });
+
         swipeRefreshLayout.setColorSchemeResources(
                 android.R.color.holo_blue_bright,
                 android.R.color.holo_green_light,
@@ -72,6 +105,94 @@ public class ShowWebView extends AppCompatActivity {
             webView.loadUrl(WEB_URL);
         } else {
             webView.loadUrl("file:///android_asset/error.html");
+        }
+    }
+
+    private void openWhatsApp() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            String url = "https://api.whatsapp.com/send?phone=" + WHATSAPP_NUMBER;
+            intent.setData(Uri.parse(url));
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "WhatsApp غير مثبت على الجهاز", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showReportIssueDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.report_issue_dialog, null);
+        builder.setView(dialogView);
+
+        final Spinner spinnerIssueType = dialogView.findViewById(R.id.spinnerIssueType);
+        final EditText editSubscriberNumber = dialogView.findViewById(R.id.editSubscriberNumber);
+        final EditText editDescription = dialogView.findViewById(R.id.editDescription);
+
+        String[] issueTypes = {
+            "اختيار نوع العطل",
+            "انقطاع الإنترنت",
+            "بطء السرعة",
+            "انقطع الكهرباء",
+            "عطل في الراوتر",
+            "مشكلة في الفاتورة",
+            "أخرى"
+        };
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+            this,
+            android.R.layout.simple_spinner_item,
+            issueTypes
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerIssueType.setAdapter(adapter);
+
+        builder.setPositiveButton("إرسال", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String issueType = spinnerIssueType.getSelectedItem().toString();
+                String subscriberNumber = editSubscriberNumber.getText().toString().trim();
+                String description = editDescription.getText().toString().trim();
+
+                if (subscriberNumber.isEmpty()) {
+                    Toast.makeText(ShowWebView.this, "يرجى إدخال رقم المشترك", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if (issueType.equals("اختيار نوع العطل")) {
+                    Toast.makeText(ShowWebView.this, "يرجى اختيار نوع العطل", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                sendReportEmail(issueType, subscriberNumber, description);
+            }
+        });
+
+        builder.setNegativeButton("إلغاء", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    private void sendReportEmail(String issueType, String subscriberNumber, String description) {
+        String subject = "بلاغ عطل - " + issueType;
+        String body = "نوع العطل: " + issueType + "\n" +
+                      "رقم المشترك: " + subscriberNumber + "\n" +
+                      "وصف العطل: " + (description.isEmpty() ? "لا يوجد وصف" : description);
+
+        Intent intent = new Intent(Intent.ACTION_SENDTO);
+        intent.setData(Uri.parse("mailto:" + SUPPORT_EMAIL));
+        intent.putExtra(Intent.EXTRA_SUBJECT, subject);
+        intent.putExtra(Intent.EXTRA_TEXT, body);
+
+        try {
+            startActivity(Intent.createChooser(intent, "إرسال البلاغ عبر..."));
+        } catch (Exception e) {
+            Toast.makeText(this, "لا يوجد تطبيق بريد إلكتروني", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -137,6 +258,43 @@ public class ShowWebView extends AppCompatActivity {
                 swipeRefreshLayout.setEnabled(webView.getScrollY() == 0);
             }
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        networkReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (!haveNetworkConnection()) {
+                    showNoNetworkDialog();
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        registerReceiver(networkReceiver, filter);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (networkReceiver != null) {
+            unregisterReceiver(networkReceiver);
+        }
+    }
+
+    private void showNoNetworkDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("انقطع الاتصال")
+            .setMessage("يرجى التأكد من اتصالك بشبكة الواي فاي الخاصة بنا")
+            .setPositiveButton("حسناً", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.dismiss();
+                }
+            })
+            .setCancelable(false)
+            .show();
     }
 
     @Override
