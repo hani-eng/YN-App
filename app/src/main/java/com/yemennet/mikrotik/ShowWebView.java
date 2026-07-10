@@ -26,6 +26,7 @@ import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.Toast;
 import android.app.AlertDialog;
+import android.util.Log;
 import android.widget.ProgressBar;
 
 import androidx.annotation.NonNull;
@@ -33,6 +34,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.google.firebase.messaging.FirebaseMessaging;
 
 public class ShowWebView extends AppCompatActivity {
 
@@ -108,6 +111,15 @@ public class ShowWebView extends AppCompatActivity {
         setupWebView();
 
         requestNotificationPermission();
+
+        FirebaseMessaging.getInstance().getToken()
+            .addOnCompleteListener(task -> {
+                if (!task.isSuccessful()) {
+                    return;
+                }
+                String token = task.getResult();
+                Log.d("FCM", "Token: " + token);
+            });
 
         if (haveNetworkConnection()) {
             webView.loadUrl(WEB_URL);

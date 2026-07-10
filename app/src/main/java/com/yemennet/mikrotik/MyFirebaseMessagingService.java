@@ -12,14 +12,18 @@ import androidx.core.app.NotificationCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
+import android.util.Log;
+
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
+    private static final String TAG = "FCM";
     private static final String CHANNEL_ID = "yemennet_notifications";
     private static final String CHANNEL_NAME = "YEMEN-NET Notifications";
 
     @Override
     public void onNewToken(String token) {
         super.onNewToken(token);
+        Log.d(TAG, "New Token: " + token);
     }
 
     @Override
