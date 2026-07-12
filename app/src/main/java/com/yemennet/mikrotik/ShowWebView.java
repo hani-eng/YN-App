@@ -1,5 +1,7 @@
 package com.yemennet.mikrotik;
 
+import android.app.AlertDialog;
+import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -16,10 +18,14 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
+import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -32,9 +38,10 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.Toast;
-import android.app.AlertDialog;
 import android.util.Log;
 import android.widget.ProgressBar;
+
+import androidx.core.content.FileProvider;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -60,8 +67,11 @@ public class ShowWebView extends AppCompatActivity {
     private static final String WHATSAPP_NUMBER = "967771908495";
     private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
     private static final int NOTIFICATION_PERMISSION_CODE = 100;
+    private static final int STORAGE_PERMISSION_CODE = 101;
 
     private BroadcastReceiver networkReceiver;
+    private long downloadId;
+    private BroadcastReceiver downloadReceiver;
 
     private boolean haveNetworkConnection() {
         boolean haveConnectedWifi = false;
@@ -357,6 +367,46 @@ public class ShowWebView extends AppCompatActivity {
                 swipeRefreshLayout.setEnabled(webView.getScrollY() == 0);
             }
         });
+
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimeType, long contentLength) {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    if (ContextCompat.checkSelfPermission(ShowWebView.this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(ShowWebView.this,
+                                new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                STORAGE_PERMISSION_CODE);
+                        return;
+                    }
+                }
+                startDownload(url, userAgent, contentDisposition, mimeType);
+            }
+        });
+    }
+
+    private void startDownload(String url, String userAgent, String contentDisposition, String mimeType) {
+        try {
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+
+            request.setMimeType(mimeType);
+            request.addRequestHeader("User-Agent", userAgent);
+            request.addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url));
+            request.setDescription("جاري التنزيل...");
+            request.setTitle(fileName);
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+
+            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            if (dm != null) {
+                downloadId = dm.enqueue(request);
+                Toast.makeText(ShowWebView.this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Log.e("ShowWebView", "Download failed", e);
+            Toast.makeText(ShowWebView.this, "فشل التنزيل", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -372,7 +422,26 @@ public class ShowWebView extends AppCompatActivity {
             }
         };
         IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
-        registerReceiver(networkReceiver, filter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(networkReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(networkReceiver, filter);
+        }
+
+        downloadReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                if (id == downloadId) {
+                    Toast.makeText(ShowWebView.this, "اكتمل التنزيل", Toast.LENGTH_SHORT).show();
+                }
+            }
+        };
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        }
     }
 
     @Override
@@ -381,6 +450,9 @@ public class ShowWebView extends AppCompatActivity {
         webView.onPause();
         if (networkReceiver != null) {
             unregisterReceiver(networkReceiver);
+        }
+        if (downloadReceiver != null) {
+            unregisterReceiver(downloadReceiver);
         }
     }
 
@@ -415,6 +487,12 @@ public class ShowWebView extends AppCompatActivity {
         if (requestCode == NOTIFICATION_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "تم تفعيل الإشعارات", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == STORAGE_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "يمكنك الآن تنزيل الملفات", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "لا يمكن التنزيل بدون إذن التخزين", Toast.LENGTH_SHORT).show();
             }
         }
     }
