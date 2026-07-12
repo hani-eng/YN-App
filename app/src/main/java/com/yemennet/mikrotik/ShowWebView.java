@@ -1,24 +1,29 @@
 package com.yemennet.mikrotik;
 
 import android.app.AlertDialog;
-import android.app.DownloadManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.MediaScannerConnection;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.MediaStore;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -44,10 +49,21 @@ import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.firebase.messaging.FirebaseMessaging;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ShowWebView extends AppCompatActivity {
 
@@ -66,10 +82,12 @@ public class ShowWebView extends AppCompatActivity {
     private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
     private static final int NOTIFICATION_PERMISSION_CODE = 100;
     private static final int STORAGE_PERMISSION_CODE = 101;
+    private static final String DOWNLOAD_CHANNEL_ID = "download_channel";
+    private static final int DOWNLOAD_NOTIFICATION_BASE = 2000;
 
     private BroadcastReceiver networkReceiver;
-    private long downloadId;
-    private BroadcastReceiver downloadReceiver;
+    private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
+    private int activeDownloadCount = 0;
 
     private boolean haveNetworkConnection() {
         boolean haveConnectedWifi = false;
@@ -141,6 +159,7 @@ public class ShowWebView extends AppCompatActivity {
             }
         });
 
+        createDownloadNotificationChannel();
         setupWebView();
 
         requestNotificationPermission();
@@ -158,6 +177,21 @@ public class ShowWebView extends AppCompatActivity {
             webView.loadUrl(WEB_URL);
         } else {
             webView.loadUrl("file:///android_asset/error.html");
+        }
+    }
+
+    private void createDownloadNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    DOWNLOAD_CHANNEL_ID,
+                    "التنزيلات",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("إشعارات تقدم التنزيل");
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
         }
     }
 
@@ -384,27 +418,169 @@ public class ShowWebView extends AppCompatActivity {
     }
 
     private void startDownload(String url, String userAgent, String contentDisposition, String mimeType) {
-        try {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+        final String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+        final int notifId = DOWNLOAD_NOTIFICATION_BASE + activeDownloadCount++;
 
-            request.setMimeType(mimeType);
-            request.addRequestHeader("User-Agent", userAgent);
-            request.addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url));
-            request.setDescription("جاري التنزيل...");
-            request.setTitle(fileName);
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
 
-            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-            if (dm != null) {
-                downloadId = dm.enqueue(request);
-                Toast.makeText(ShowWebView.this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, DOWNLOAD_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle(fileName)
+                .setContentText("جاري التنزيل...")
+                .setProgress(100, 0, true)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW);
+
+        nm.notify(notifId, builder.build());
+
+        Toast.makeText(this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
+
+        final String cookie = CookieManager.getInstance().getCookie(url);
+        final String ua = webView.getSettings().getUserAgentString();
+
+        downloadExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                InputStream input = null;
+                OutputStream output = null;
+                HttpURLConnection connection = null;
+                try {
+                    URL downloadUrl = new URL(url);
+                    connection = (HttpURLConnection) downloadUrl.openConnection();
+                    connection.setConnectTimeout(15000);
+                    connection.setReadTimeout(30000);
+                    connection.setRequestProperty("User-Agent", ua);
+                    if (cookie != null) {
+                        connection.setRequestProperty("Cookie", cookie);
+                    }
+                    connection.connect();
+
+                    int responseCode = connection.getResponseCode();
+                    if (responseCode != HttpURLConnection.HTTP_OK) {
+                        throw new Exception("HTTP error code: " + responseCode);
+                    }
+
+                    int fileLength = connection.getContentLength();
+                    input = connection.getInputStream();
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        ContentValues values = new ContentValues();
+                        values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                        values.put(MediaStore.Downloads.MIME_TYPE, mimeType != null ? mimeType : "application/octet-stream");
+                        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+
+                        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                        if (uri == null) {
+                            throw new Exception("Failed to create MediaStore entry");
+                        }
+                        output = getContentResolver().openOutputStream(uri);
+                    } else {
+                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                        if (!downloadsDir.exists()) {
+                            downloadsDir.mkdirs();
+                        }
+                        File outputFile = new File(downloadsDir, fileName);
+                        output = new FileOutputStream(outputFile);
+                    }
+
+                    byte[] buffer = new byte[8192];
+                    long total = 0;
+                    int count;
+                    int lastProgress = 0;
+                    while ((count = input.read(buffer)) != -1) {
+                        total += count;
+                        output.write(buffer, 0, count);
+
+                        int progress;
+                        if (fileLength > 0) {
+                            progress = (int) (total * 100 / fileLength);
+                        } else {
+                            progress = (int) (total / 1024);
+                        }
+                        if (progress != lastProgress) {
+                            lastProgress = progress;
+                            final int p = progress;
+                            final long t = total;
+                            final int fl = fileLength;
+                            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    String text;
+                                    if (fl > 0) {
+                                        text = "جاري التنزيل... " + p + "%";
+                                    } else {
+                                        text = "جاري التنزيل... " + (t / 1024) + " KB";
+                                    }
+                                    builder.setProgress(100, p, fl <= 0);
+                                    builder.setContentText(text);
+                                    try {
+                                        nm.notify(notifId, builder.build());
+                                    } catch (Exception ignored) {}
+                                }
+                            });
+                        }
+                    }
+
+                    output.flush();
+                    output.close();
+                    input.close();
+                    connection.disconnect();
+
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        MediaScannerConnection.scanFile(ShowWebView.this,
+                                new String[]{new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName).getAbsolutePath()},
+                                null, null);
+                    }
+
+                    final String savedPath;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        savedPath = Environment.DIRECTORY_DOWNLOADS + "/" + fileName;
+                    } else {
+                        savedPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + fileName;
+                    }
+
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(ShowWebView.this, "اكتمل التنزيل: " + fileName, Toast.LENGTH_LONG).show();
+                        }
+                    });
+
+                    builder.setProgress(0, 0, false)
+                            .setOngoing(false)
+                            .setContentText("اكتمل التنزيل")
+                            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                            .setAutoCancel(true);
+                    try {
+                        nm.notify(notifId, builder.build());
+                    } catch (Exception ignored) {}
+
+                } catch (Exception e) {
+                    Log.e("ShowWebView", "Download failed", e);
+                    final String errorMsg = e.getMessage();
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(ShowWebView.this, "فشل التنزيل: " + (errorMsg != null ? errorMsg : "خطأ غير معروف"), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                    builder.setProgress(0, 0, false)
+                            .setOngoing(false)
+                            .setContentText("فشل التنزيل")
+                            .setSmallIcon(android.R.drawable.stat_notify_error)
+                            .setAutoCancel(true);
+                    try {
+                        nm.notify(notifId, builder.build());
+                    } catch (Exception ignored) {}
+                } finally {
+                    try {
+                        if (output != null) output.close();
+                        if (input != null) input.close();
+                    } catch (Exception ignored) {}
+                    if (connection != null) connection.disconnect();
+                }
             }
-        } catch (Exception e) {
-            Log.e("ShowWebView", "Download failed", e);
-            Toast.makeText(ShowWebView.this, "فشل التنزيل", Toast.LENGTH_SHORT).show();
-        }
+        });
     }
 
     @Override
@@ -425,21 +601,6 @@ public class ShowWebView extends AppCompatActivity {
         } else {
             registerReceiver(networkReceiver, filter);
         }
-
-        downloadReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                if (id == downloadId) {
-                    Toast.makeText(ShowWebView.this, "اكتمل التنزيل", Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-        }
     }
 
     @Override
@@ -448,9 +609,6 @@ public class ShowWebView extends AppCompatActivity {
         webView.onPause();
         if (networkReceiver != null) {
             unregisterReceiver(networkReceiver);
-        }
-        if (downloadReceiver != null) {
-            unregisterReceiver(downloadReceiver);
         }
     }
 
@@ -512,6 +670,7 @@ public class ShowWebView extends AppCompatActivity {
         if (webView != null) {
             webView.destroy();
         }
+        downloadExecutor.shutdownNow();
         super.onDestroy();
     }
 }
