@@ -51,7 +51,7 @@ jobs:
         export KEYSTORE_PASSWORD=yemen123
         export KEY_ALIAS=yemen-net
         export KEY_PASSWORD=yemen123
-        ./gradlew assembleRelease --stacktrace --info
+        ./gradlew assembleRelease --stacktrace
 
     - name: Build Debug APK
       run: |

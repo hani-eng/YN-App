@@ -41,8 +41,6 @@ import android.widget.Toast;
 import android.util.Log;
 import android.widget.ProgressBar;
 
-import androidx.core.content.FileProvider;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
