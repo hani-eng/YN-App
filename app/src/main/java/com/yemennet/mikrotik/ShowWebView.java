@@ -431,12 +431,15 @@ public class ShowWebView extends AppCompatActivity {
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW);
 
-        nm.notify(notifId, builder.build());
+        try {
+            nm.notify(notifId, builder.build());
+        } catch (Exception ignored) {}
 
         Toast.makeText(this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
 
-        final String cookie = CookieManager.getInstance().getCookie(url);
-        final String ua = webView.getSettings().getUserAgentString();
+        final String allCookies = CookieManager.getInstance().getCookie(url);
+        final String pageUrl = webView.getUrl() != null ? webView.getUrl() : url;
+        final String referer = webView.getUrl() != null ? webView.getUrl() : url;
 
         downloadExecutor.execute(new Runnable() {
             @Override
@@ -447,20 +450,56 @@ public class ShowWebView extends AppCompatActivity {
                 try {
                     URL downloadUrl = new URL(url);
                     connection = (HttpURLConnection) downloadUrl.openConnection();
-                    connection.setConnectTimeout(15000);
-                    connection.setReadTimeout(30000);
-                    connection.setRequestProperty("User-Agent", ua);
-                    if (cookie != null) {
-                        connection.setRequestProperty("Cookie", cookie);
+                    connection.setConnectTimeout(30000);
+                    connection.setReadTimeout(60000);
+                    connection.setInstanceFollowRedirects(true);
+                    connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+                    connection.setRequestProperty("Accept", "*/*");
+                    connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
+                    connection.setRequestProperty("Referer", referer);
+                    connection.setRequestProperty("Accept-Encoding", "identity");
+
+                    if (allCookies != null && !allCookies.isEmpty()) {
+                        connection.setRequestProperty("Cookie", allCookies);
                     }
+
                     connection.connect();
 
                     int responseCode = connection.getResponseCode();
-                    if (responseCode != HttpURLConnection.HTTP_OK) {
-                        throw new Exception("HTTP error code: " + responseCode);
+                    Log.d("ShowWebView", "Download response code: " + responseCode + " for URL: " + url);
+
+                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP) {
+                        String newUrl = connection.getHeaderField("Location");
+                        connection.disconnect();
+                        if (newUrl != null) {
+                            Log.d("ShowWebView", "Redirect to: " + newUrl);
+                            connection = (HttpURLConnection) new URL(newUrl).openConnection();
+                            connection.setConnectTimeout(30000);
+                            connection.setReadTimeout(60000);
+                            connection.setInstanceFollowRedirects(true);
+                            connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+                            connection.setRequestProperty("Accept", "*/*");
+                            connection.setRequestProperty("Referer", referer);
+                            if (allCookies != null && !allCookies.isEmpty()) {
+                                connection.setRequestProperty("Cookie", allCookies);
+                            }
+                            connection.connect();
+                            responseCode = connection.getResponseCode();
+                        }
                     }
 
-                    int fileLength = connection.getContentLength();
+                    if (responseCode != HttpURLConnection.HTTP_OK) {
+                        throw new Exception("خطأ في الخادم: " + responseCode);
+                    }
+
+                    String contentType = connection.getContentType();
+                    int contentLength = connection.getContentLength();
+                    Log.d("ShowWebView", "Content-Type: " + contentType + " Length: " + contentLength);
+
+                    if (contentType != null && contentType.contains("text/html")) {
+                        throw new Exception("الخادم أعاد صفحة HTML بدلاً من الملف - تأكد من تسجيل الدخول");
+                    }
+
                     input = connection.getInputStream();
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -471,7 +510,7 @@ public class ShowWebView extends AppCompatActivity {
 
                         Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                         if (uri == null) {
-                            throw new Exception("Failed to create MediaStore entry");
+                            throw new Exception("فشل في إنشاء ملف");
                         }
                         output = getContentResolver().openOutputStream(uri);
                     } else {
@@ -492,8 +531,8 @@ public class ShowWebView extends AppCompatActivity {
                         output.write(buffer, 0, count);
 
                         int progress;
-                        if (fileLength > 0) {
-                            progress = (int) (total * 100 / fileLength);
+                        if (contentLength > 0) {
+                            progress = (int) (total * 100 / contentLength);
                         } else {
                             progress = (int) (total / 1024);
                         }
@@ -501,13 +540,13 @@ public class ShowWebView extends AppCompatActivity {
                             lastProgress = progress;
                             final int p = progress;
                             final long t = total;
-                            final int fl = fileLength;
+                            final int fl = contentLength;
                             new Handler(Looper.getMainLooper()).post(new Runnable() {
                                 @Override
                                 public void run() {
                                     String text;
                                     if (fl > 0) {
-                                        text = "جاري التنزيل... " + p + "%";
+                                        text = "جاري التنزيل... " + p + "% (" + (t / 1024) + " KB)";
                                     } else {
                                         text = "جاري التنزيل... " + (t / 1024) + " KB";
                                     }
@@ -523,7 +562,9 @@ public class ShowWebView extends AppCompatActivity {
 
                     output.flush();
                     output.close();
+                    output = null;
                     input.close();
+                    input = null;
                     connection.disconnect();
 
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -532,23 +573,17 @@ public class ShowWebView extends AppCompatActivity {
                                 null, null);
                     }
 
-                    final String savedPath;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        savedPath = Environment.DIRECTORY_DOWNLOADS + "/" + fileName;
-                    } else {
-                        savedPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + fileName;
-                    }
-
+                    final long finalTotal = total;
                     new Handler(Looper.getMainLooper()).post(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(ShowWebView.this, "اكتمل التنزيل: " + fileName, Toast.LENGTH_LONG).show();
+                            Toast.makeText(ShowWebView.this, "اكتمل التنزيل: " + fileName + " (" + (finalTotal / 1024) + " KB)", Toast.LENGTH_LONG).show();
                         }
                     });
 
                     builder.setProgress(0, 0, false)
                             .setOngoing(false)
-                            .setContentText("اكتمل التنزيل")
+                            .setContentText("اكتمل التنزيل - " + (total / 1024) + " KB")
                             .setSmallIcon(android.R.drawable.stat_sys_download_done)
                             .setAutoCancel(true);
                     try {
