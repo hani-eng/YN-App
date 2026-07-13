@@ -412,12 +412,18 @@ public class ShowWebView extends AppCompatActivity {
                         return;
                     }
                 }
-                startDownload(url, userAgent, contentDisposition, mimeType);
+
+                final String allCookies = CookieManager.getInstance().getCookie(url);
+                final String referer = webView.getUrl() != null ? webView.getUrl() : url;
+                final String ua = webView.getSettings().getUserAgentString();
+
+                startDownload(url, contentDisposition, mimeType, allCookies, referer, ua);
             }
         });
     }
 
-    private void startDownload(String url, String userAgent, String contentDisposition, String mimeType) {
+    private void startDownload(String url, String contentDisposition, String mimeType,
+                               String allCookies, String referer, String ua) {
         final String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
         final int notifId = DOWNLOAD_NOTIFICATION_BASE + activeDownloadCount++;
 
@@ -437,10 +443,6 @@ public class ShowWebView extends AppCompatActivity {
 
         Toast.makeText(this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
 
-        final String allCookies = CookieManager.getInstance().getCookie(url);
-        final String pageUrl = webView.getUrl() != null ? webView.getUrl() : url;
-        final String referer = webView.getUrl() != null ? webView.getUrl() : url;
-
         downloadExecutor.execute(new Runnable() {
             @Override
             public void run() {
@@ -453,7 +455,7 @@ public class ShowWebView extends AppCompatActivity {
                     connection.setConnectTimeout(30000);
                     connection.setReadTimeout(60000);
                     connection.setInstanceFollowRedirects(true);
-                    connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+                    connection.setRequestProperty("User-Agent", ua);
                     connection.setRequestProperty("Accept", "*/*");
                     connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
                     connection.setRequestProperty("Referer", referer);
@@ -477,7 +479,7 @@ public class ShowWebView extends AppCompatActivity {
                             connection.setConnectTimeout(30000);
                             connection.setReadTimeout(60000);
                             connection.setInstanceFollowRedirects(true);
-                            connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+                            connection.setRequestProperty("User-Agent", ua);
                             connection.setRequestProperty("Accept", "*/*");
                             connection.setRequestProperty("Referer", referer);
                             if (allCookies != null && !allCookies.isEmpty()) {
