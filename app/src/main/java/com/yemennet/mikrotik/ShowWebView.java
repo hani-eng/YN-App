@@ -62,6 +62,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -84,10 +85,14 @@ public class ShowWebView extends AppCompatActivity {
     private static final int STORAGE_PERMISSION_CODE = 101;
     private static final String DOWNLOAD_CHANNEL_ID = "download_channel";
     private static final int DOWNLOAD_NOTIFICATION_BASE = 2000;
+    private static final String ACTION_CANCEL_DOWNLOAD = "com.yemennet.mikrotik.CANCEL_DOWNLOAD";
+    private static final String EXTRA_DOWNLOAD_NOTIF_ID = "notif_id";
 
     private BroadcastReceiver networkReceiver;
     private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
     private int activeDownloadCount = 0;
+    private final ConcurrentHashMap<Integer, Boolean> activeDownloads = new ConcurrentHashMap<>();
+    private BroadcastReceiver cancelReceiver;
 
     private boolean haveNetworkConnection() {
         boolean haveConnectedWifi = false;
@@ -160,6 +165,24 @@ public class ShowWebView extends AppCompatActivity {
         });
 
         createDownloadNotificationChannel();
+
+        cancelReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                int notifId = intent.getIntExtra(EXTRA_DOWNLOAD_NOTIF_ID, -1);
+                if (notifId >= 0) {
+                    activeDownloads.put(notifId, false);
+                    NotificationManagerCompat.from(ShowWebView.this).cancel(notifId);
+                    Toast.makeText(ShowWebView.this, "تم إلغاء التنزيل", Toast.LENGTH_SHORT).show();
+                }
+            }
+        };
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(cancelReceiver, new IntentFilter(ACTION_CANCEL_DOWNLOAD), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(cancelReceiver, new IntentFilter(ACTION_CANCEL_DOWNLOAD));
+        }
+
         setupWebView();
 
         requestNotificationPermission();
@@ -426,8 +449,12 @@ public class ShowWebView extends AppCompatActivity {
                                String allCookies, String referer, String ua) {
         final String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
         final int notifId = DOWNLOAD_NOTIFICATION_BASE + activeDownloadCount++;
+        final NotificationManagerCompat nm = NotificationManagerCompat.from(this);
 
-        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
+        Intent cancelIntent = new Intent(ACTION_CANCEL_DOWNLOAD);
+        cancelIntent.putExtra(EXTRA_DOWNLOAD_NOTIF_ID, notifId);
+        PendingIntent cancelPending = PendingIntent.getBroadcast(this, notifId, cancelIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, DOWNLOAD_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -435,6 +462,7 @@ public class ShowWebView extends AppCompatActivity {
                 .setContentText("جاري التنزيل...")
                 .setProgress(100, 0, true)
                 .setOngoing(true)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "إلغاء", cancelPending)
                 .setPriority(NotificationCompat.PRIORITY_LOW);
 
         try {
@@ -442,6 +470,8 @@ public class ShowWebView extends AppCompatActivity {
         } catch (Exception ignored) {}
 
         Toast.makeText(this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
+
+        activeDownloads.put(notifId, true);
 
         downloadExecutor.execute(new Runnable() {
             @Override
@@ -529,6 +559,9 @@ public class ShowWebView extends AppCompatActivity {
                     int count;
                     int lastProgress = 0;
                     while ((count = input.read(buffer)) != -1) {
+                        if (!activeDownloads.getOrDefault(notifId, false)) {
+                            throw new Exception("تم إلغاء التنزيل");
+                        }
                         total += count;
                         output.write(buffer, 0, count);
 
@@ -595,21 +628,25 @@ public class ShowWebView extends AppCompatActivity {
                 } catch (Exception e) {
                     Log.e("ShowWebView", "Download failed", e);
                     final String errorMsg = e.getMessage();
+                    final boolean cancelled = "تم إلغاء التنزيل".equals(errorMsg);
                     new Handler(Looper.getMainLooper()).post(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(ShowWebView.this, "فشل التنزيل: " + (errorMsg != null ? errorMsg : "خطأ غير معروف"), Toast.LENGTH_LONG).show();
+                            if (!cancelled) {
+                                Toast.makeText(ShowWebView.this, "فشل التنزيل: " + (errorMsg != null ? errorMsg : "خطأ غير معروف"), Toast.LENGTH_LONG).show();
+                            }
                         }
                     });
                     builder.setProgress(0, 0, false)
                             .setOngoing(false)
-                            .setContentText("فشل التنزيل")
-                            .setSmallIcon(android.R.drawable.stat_notify_error)
+                            .setContentText(cancelled ? "تم الإلغاء" : "فشل التنزيل")
+                            .setSmallIcon(cancelled ? android.R.drawable.stat_sys_download_done : android.R.drawable.stat_notify_error)
                             .setAutoCancel(true);
                     try {
                         nm.notify(notifId, builder.build());
                     } catch (Exception ignored) {}
                 } finally {
+                    activeDownloads.remove(notifId);
                     try {
                         if (output != null) output.close();
                         if (input != null) input.close();
@@ -706,6 +743,9 @@ public class ShowWebView extends AppCompatActivity {
     protected void onDestroy() {
         if (webView != null) {
             webView.destroy();
+        }
+        if (cancelReceiver != null) {
+            unregisterReceiver(cancelReceiver);
         }
         downloadExecutor.shutdownNow();
         super.onDestroy();
