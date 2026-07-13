@@ -1,10 +1,7 @@
 package com.yemennet.mikrotik;
 
 import android.app.AlertDialog;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -14,23 +11,17 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.media.MediaScannerConnection;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
-import android.provider.MediaStore;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
-import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -49,22 +40,10 @@ import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.firebase.messaging.FirebaseMessaging;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class ShowWebView extends AppCompatActivity {
 
@@ -82,17 +61,8 @@ public class ShowWebView extends AppCompatActivity {
     private static final String WHATSAPP_NUMBER = "967771908495";
     private static final String SUPPORT_EMAIL = "hanialbairy1996@gmail.com";
     private static final int NOTIFICATION_PERMISSION_CODE = 100;
-    private static final int STORAGE_PERMISSION_CODE = 101;
-    private static final String DOWNLOAD_CHANNEL_ID = "download_channel";
-    private static final int DOWNLOAD_NOTIFICATION_BASE = 2000;
-    private static final String ACTION_CANCEL_DOWNLOAD = "com.yemennet.mikrotik.CANCEL_DOWNLOAD";
-    private static final String EXTRA_DOWNLOAD_NOTIF_ID = "notif_id";
 
     private BroadcastReceiver networkReceiver;
-    private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
-    private int activeDownloadCount = 0;
-    private final ConcurrentHashMap<Integer, Boolean> activeDownloads = new ConcurrentHashMap<>();
-    private BroadcastReceiver cancelReceiver;
 
     private boolean haveNetworkConnection() {
         boolean haveConnectedWifi = false;
@@ -164,25 +134,6 @@ public class ShowWebView extends AppCompatActivity {
             }
         });
 
-        createDownloadNotificationChannel();
-
-        cancelReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                int notifId = intent.getIntExtra(EXTRA_DOWNLOAD_NOTIF_ID, -1);
-                if (notifId >= 0) {
-                    activeDownloads.put(notifId, false);
-                    NotificationManagerCompat.from(ShowWebView.this).cancel(notifId);
-                    Toast.makeText(ShowWebView.this, "تم إلغاء التنزيل", Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(cancelReceiver, new IntentFilter(ACTION_CANCEL_DOWNLOAD), Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(cancelReceiver, new IntentFilter(ACTION_CANCEL_DOWNLOAD));
-        }
-
         setupWebView();
 
         requestNotificationPermission();
@@ -200,21 +151,6 @@ public class ShowWebView extends AppCompatActivity {
             webView.loadUrl(WEB_URL);
         } else {
             webView.loadUrl("file:///android_asset/error.html");
-        }
-    }
-
-    private void createDownloadNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    DOWNLOAD_CHANNEL_ID,
-                    "التنزيلات",
-                    NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("إشعارات تقدم التنزيل");
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(channel);
-            }
         }
     }
 
@@ -426,232 +362,11 @@ public class ShowWebView extends AppCompatActivity {
         webView.setDownloadListener(new DownloadListener() {
             @Override
             public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimeType, long contentLength) {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                    if (ContextCompat.checkSelfPermission(ShowWebView.this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                            != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(ShowWebView.this,
-                                new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                                STORAGE_PERMISSION_CODE);
-                        return;
-                    }
-                }
-
-                final String allCookies = CookieManager.getInstance().getCookie(url);
-                final String referer = webView.getUrl() != null ? webView.getUrl() : url;
-                final String ua = webView.getSettings().getUserAgentString();
-
-                startDownload(url, contentDisposition, mimeType, allCookies, referer, ua);
-            }
-        });
-    }
-
-    private void startDownload(String url, String contentDisposition, String mimeType,
-                               String allCookies, String referer, String ua) {
-        final String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
-        final int notifId = DOWNLOAD_NOTIFICATION_BASE + activeDownloadCount++;
-        final NotificationManagerCompat nm = NotificationManagerCompat.from(this);
-
-        Intent cancelIntent = new Intent(ACTION_CANCEL_DOWNLOAD);
-        cancelIntent.putExtra(EXTRA_DOWNLOAD_NOTIF_ID, notifId);
-        PendingIntent cancelPending = PendingIntent.getBroadcast(this, notifId, cancelIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, DOWNLOAD_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle(fileName)
-                .setContentText("جاري التنزيل...")
-                .setProgress(100, 0, true)
-                .setOngoing(true)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "إلغاء", cancelPending)
-                .setPriority(NotificationCompat.PRIORITY_LOW);
-
-        try {
-            nm.notify(notifId, builder.build());
-        } catch (Exception ignored) {}
-
-        Toast.makeText(this, "بدأ التنزيل: " + fileName, Toast.LENGTH_SHORT).show();
-
-        activeDownloads.put(notifId, true);
-
-        downloadExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                InputStream input = null;
-                OutputStream output = null;
-                HttpURLConnection connection = null;
                 try {
-                    URL downloadUrl = new URL(url);
-                    connection = (HttpURLConnection) downloadUrl.openConnection();
-                    connection.setConnectTimeout(30000);
-                    connection.setReadTimeout(60000);
-                    connection.setInstanceFollowRedirects(true);
-                    connection.setRequestProperty("User-Agent", ua);
-                    connection.setRequestProperty("Accept", "*/*");
-                    connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
-                    connection.setRequestProperty("Referer", referer);
-                    connection.setRequestProperty("Accept-Encoding", "identity");
-
-                    if (allCookies != null && !allCookies.isEmpty()) {
-                        connection.setRequestProperty("Cookie", allCookies);
-                    }
-
-                    connection.connect();
-
-                    int responseCode = connection.getResponseCode();
-                    Log.d("ShowWebView", "Download response code: " + responseCode + " for URL: " + url);
-
-                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP) {
-                        String newUrl = connection.getHeaderField("Location");
-                        connection.disconnect();
-                        if (newUrl != null) {
-                            Log.d("ShowWebView", "Redirect to: " + newUrl);
-                            connection = (HttpURLConnection) new URL(newUrl).openConnection();
-                            connection.setConnectTimeout(30000);
-                            connection.setReadTimeout(60000);
-                            connection.setInstanceFollowRedirects(true);
-                            connection.setRequestProperty("User-Agent", ua);
-                            connection.setRequestProperty("Accept", "*/*");
-                            connection.setRequestProperty("Referer", referer);
-                            if (allCookies != null && !allCookies.isEmpty()) {
-                                connection.setRequestProperty("Cookie", allCookies);
-                            }
-                            connection.connect();
-                            responseCode = connection.getResponseCode();
-                        }
-                    }
-
-                    if (responseCode != HttpURLConnection.HTTP_OK) {
-                        throw new Exception("خطأ في الخادم: " + responseCode);
-                    }
-
-                    String contentType = connection.getContentType();
-                    int contentLength = connection.getContentLength();
-                    Log.d("ShowWebView", "Content-Type: " + contentType + " Length: " + contentLength);
-
-                    if (contentType != null && contentType.contains("text/html")) {
-                        throw new Exception("الخادم أعاد صفحة HTML بدلاً من الملف - تأكد من تسجيل الدخول");
-                    }
-
-                    input = connection.getInputStream();
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        ContentValues values = new ContentValues();
-                        values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-                        values.put(MediaStore.Downloads.MIME_TYPE, mimeType != null ? mimeType : "application/octet-stream");
-                        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-
-                        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                        if (uri == null) {
-                            throw new Exception("فشل في إنشاء ملف");
-                        }
-                        output = getContentResolver().openOutputStream(uri);
-                    } else {
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        if (!downloadsDir.exists()) {
-                            downloadsDir.mkdirs();
-                        }
-                        File outputFile = new File(downloadsDir, fileName);
-                        output = new FileOutputStream(outputFile);
-                    }
-
-                    byte[] buffer = new byte[8192];
-                    long total = 0;
-                    int count;
-                    int lastProgress = 0;
-                    while ((count = input.read(buffer)) != -1) {
-                        if (!activeDownloads.getOrDefault(notifId, false)) {
-                            throw new Exception("تم إلغاء التنزيل");
-                        }
-                        total += count;
-                        output.write(buffer, 0, count);
-
-                        int progress;
-                        if (contentLength > 0) {
-                            progress = (int) (total * 100 / contentLength);
-                        } else {
-                            progress = (int) (total / 1024);
-                        }
-                        if (progress != lastProgress) {
-                            lastProgress = progress;
-                            final int p = progress;
-                            final long t = total;
-                            final int fl = contentLength;
-                            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    String text;
-                                    if (fl > 0) {
-                                        text = "جاري التنزيل... " + p + "% (" + (t / 1024) + " KB)";
-                                    } else {
-                                        text = "جاري التنزيل... " + (t / 1024) + " KB";
-                                    }
-                                    builder.setProgress(100, p, fl <= 0);
-                                    builder.setContentText(text);
-                                    try {
-                                        nm.notify(notifId, builder.build());
-                                    } catch (Exception ignored) {}
-                                }
-                            });
-                        }
-                    }
-
-                    output.flush();
-                    output.close();
-                    output = null;
-                    input.close();
-                    input = null;
-                    connection.disconnect();
-
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                        MediaScannerConnection.scanFile(ShowWebView.this,
-                                new String[]{new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName).getAbsolutePath()},
-                                null, null);
-                    }
-
-                    final long finalTotal = total;
-                    new Handler(Looper.getMainLooper()).post(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(ShowWebView.this, "اكتمل التنزيل: " + fileName + " (" + (finalTotal / 1024) + " KB)", Toast.LENGTH_LONG).show();
-                        }
-                    });
-
-                    builder.setProgress(0, 0, false)
-                            .setOngoing(false)
-                            .setContentText("اكتمل التنزيل - " + (total / 1024) + " KB")
-                            .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                            .setAutoCancel(true);
-                    try {
-                        nm.notify(notifId, builder.build());
-                    } catch (Exception ignored) {}
-
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    startActivity(intent);
                 } catch (Exception e) {
-                    Log.e("ShowWebView", "Download failed", e);
-                    final String errorMsg = e.getMessage();
-                    final boolean cancelled = "تم إلغاء التنزيل".equals(errorMsg);
-                    new Handler(Looper.getMainLooper()).post(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (!cancelled) {
-                                Toast.makeText(ShowWebView.this, "فشل التنزيل: " + (errorMsg != null ? errorMsg : "خطأ غير معروف"), Toast.LENGTH_LONG).show();
-                            }
-                        }
-                    });
-                    builder.setProgress(0, 0, false)
-                            .setOngoing(false)
-                            .setContentText(cancelled ? "تم الإلغاء" : "فشل التنزيل")
-                            .setSmallIcon(cancelled ? android.R.drawable.stat_sys_download_done : android.R.drawable.stat_notify_error)
-                            .setAutoCancel(true);
-                    try {
-                        nm.notify(notifId, builder.build());
-                    } catch (Exception ignored) {}
-                } finally {
-                    activeDownloads.remove(notifId);
-                    try {
-                        if (output != null) output.close();
-                        if (input != null) input.close();
-                    } catch (Exception ignored) {}
-                    if (connection != null) connection.disconnect();
+                    Toast.makeText(ShowWebView.this, "لا يمكن فتح رابط التنزيل", Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -718,12 +433,6 @@ public class ShowWebView extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "تم تفعيل الإشعارات", Toast.LENGTH_SHORT).show();
             }
-        } else if (requestCode == STORAGE_PERMISSION_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "يمكنك الآن تنزيل الملفات", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "لا يمكن التنزيل بدون إذن التخزين", Toast.LENGTH_SHORT).show();
-            }
         }
     }
 
@@ -744,10 +453,6 @@ public class ShowWebView extends AppCompatActivity {
         if (webView != null) {
             webView.destroy();
         }
-        if (cancelReceiver != null) {
-            unregisterReceiver(cancelReceiver);
-        }
-        downloadExecutor.shutdownNow();
         super.onDestroy();
     }
 }
